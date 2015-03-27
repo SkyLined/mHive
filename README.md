@@ -64,9 +64,9 @@ Where `dxOptions` is an object that can have the following properties:
 - `Number uIPVersion`: IP version to use (valid values: 4 (default), 6).
 - `Number uPort`: port number to send to (default: 28876).
 And `dfActivities` is an associative array of activities. Each activity is
-identified by  a (string) name, which is associateed with a function that
+identified by  a (string) name, which is associated with a function that
 performs the activity and returns a result. The result must be a value that
-can be converted to a string using `JSON.stringify`
+can be converted to a string using `JSON.stringify`.
 
 #### Events:
 ##### `error`, parameter: `Error oError`
@@ -85,6 +85,13 @@ Emitted when a connection to a master is disconnected.
 Emitted when the worker no more connections to masters and stopped listening
 for new connection requests. This can happen when there is a network error or
 after you tell the worker to stop.
+
+#### Properties:
+##### `Object dfActivities`
+An associative array of activities that the worker can perform. Each activity is
+identified by  a (string) name, which is associated with a function that
+performs the activity and returns a result. The result must be a value that
+can be converted to a string using `JSON.stringify`.
 
 #### Methods:
 ##### `undefined fStop()`
@@ -126,10 +133,11 @@ Where `dxOptions` is an object that can have the following properties:
              connection requests to the local subnet (default: 10,000).
 - `Number uConnectionKeepAlive`: Enable sending [TCP keep-alive](http://en.wikipedia.org/wiki/Keepalive#TCP_keepalive)
           packets every `uConnectionKeepAlive` milliseconds.
-At regular intervals, a `cMaster` instance will broadcast over UDP to the local
-subnet. This broadcast contains a request for `cWorkers` to connect to it. Once
-a worker is connected, request can be made for it to perform activities and
-return the results.
+- `Number uMTU`: Maximum Transfer Unit (default: `undefined` - the code will
+                attempt to determine the value automatically if needed).
+At regular intervals, a `cMaster` instance will send over UDP to the local
+subnet a request for `cWorkers` to connect to it. Once a worker is connected,
+request can be made for it to perform activities.
 
 #### Events:
 ##### `error`, parameter: `Error oError`
@@ -148,6 +156,9 @@ This can happen when there is a network error or after you tell the master to
 stop.
 
 #### Methods:
+##### `cMasterConnectionToWorker[] faoGetConnections()`
+Return an array of `cMasterConnectionToWorker` instances that represent all
+active connections to workers.
 ##### `undefined fStop()`
 Stop sending connection requests, close all existing connections to workers and
 do not accept any new connections from workers.

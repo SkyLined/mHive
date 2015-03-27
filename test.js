@@ -9,11 +9,14 @@ function startMaster(fCallback) {
   });
   oHiveMaster.on("start", function () {
     console.log("HiveMaster:start");
-    fCallback(oHiveMaster);
+    fCallback && fCallback(oHiveMaster);
+  });
+  oHiveMaster.on("request connection", function () {
+    console.log("HiveMaster:request connection");
   });
   oHiveMaster.on("connect", function (oHiveMasterConnectionToWorker) {
     // hook all events and output them
-    console.log("HiveMaster:connect (oHiveMasterConnectionToWorker =", oHiveMasterConnectionToWorker.oConnection.sId, ")");
+    console.log("HiveMaster:connect (oHiveMasterConnectionToWorker = " + oHiveMasterConnectionToWorker.toString() + ")");
     oHiveMasterConnectionToWorker.on("error", function (oError) {
       console.log("oHiveMasterConnectionToWorker:error (oError =", oError, ")");
     });
@@ -53,7 +56,7 @@ function startMaster(fCallback) {
     });
   });
   oHiveMaster.on("disconnect", function (oHiveMasterConnectionToWorker) {
-    console.log("HiveMaster:disconnect (oHiveMasterConnectionToWorker =", oHiveMasterConnectionToWorker.oConnection.sId, ")");
+    console.log("HiveMaster:disconnect (oHiveMasterConnectionToWorker = " + oHiveMasterConnectionToWorker.toString() + ")");
   });
   oHiveMaster.on("stop", function () {
     console.log("HiveMaster:stop");
@@ -67,13 +70,13 @@ function startWorker(dfActivities, fCallback) {
   });
   oHiveWorker.on("start", function () {
     console.log("HiveWorker:start");
-    fCallback(oHiveWorker);
+    fCallback && fCallback(oHiveWorker);
   });
   oHiveWorker.on("message", function (oSender, oError, xMessage) {
     console.log("HiveWorker:message (oSender = ", oSender, ", oError =", oError, ", xMessage =", JSON.stringify(xMessage) + ")");
   });
   oHiveWorker.on("connect", function (oHiveWorkerConnectionToMaster) {
-    console.log("HiveWorker:connect (oHiveWorkerConnectionToMaster =", oHiveWorkerConnectionToMaster.oConnection.sId, ")");
+    console.log("HiveWorker:connect (oHiveWorkerConnectionToMaster = " + oHiveWorkerConnectionToMaster.toString() + ")");
     oHiveWorkerConnectionToMaster.on("error", function (oError) {
       console.log("oHiveWorkerConnectionToMaster:error (oError =", oError, ")");
     });
@@ -88,7 +91,7 @@ function startWorker(dfActivities, fCallback) {
     });
   });
   oHiveWorker.on("disconnect", function (oHiveWorkerConnectionToMaster) {
-    console.log("HiveWorker:disconnect (oHiveWorkerConnectionToMaster =", oHiveWorkerConnectionToMaster.oConnection.sId, ")");
+    console.log("HiveWorker:disconnect (oHiveWorkerConnectionToMaster = " + oHiveWorkerConnectionToMaster.toString() + ")");
   });
   oHiveWorker.on("stop", function () {
     console.log("HiveWorker:stop");
@@ -105,11 +108,17 @@ var dfActivities = {
   },
   "2 stop": function (oHiveWorkerConnectionToMaster, xData) {
     console.log("Executing activity \"stop\"");
-    oHiveWorkerConnectionToMaster.oHiveWorker.fStop();
+    oHiveWorkerConnectionToMaster.oWorker.fStop();
   }
 };
 
-startWorker(dfActivities, function(oHiveWorker) {
-  startMaster(function(oHiveMaster) {
+if (process.argv[2] == "worker") {
+  startWorker(dfActivities);
+} else if (process.argv[2] == "master") {
+  startMaster();
+} else {
+  startWorker(dfActivities, function(oHiveWorker) {
+    startMaster(function(oHiveMaster) {
+    });
   });
-});
+}

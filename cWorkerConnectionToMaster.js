@@ -8,22 +8,26 @@ function cWorkerConnectionToMaster(oWorker, oConnection) {
   // events: error, request, response, disconnect
   var oThis = this;
   oThis.oWorker = oWorker;
-  oThis.oConnection = oConnection;
-  oThis.oConnection.on("error", function (oError) {
+  oThis._oConnection = oConnection;
+  oThis._oConnection.on("error", function (oError) {
     oThis.emit("error", oError);
   });
-  oThis.oConnection.on("disconnect", function () {
+  oThis._oConnection.on("disconnect", function () {
     oThis.emit("disconnect");
   });
-  oThis.oConnection.on("message", function (oError, xMessage) {
+  oThis._oConnection.on("message", function (oError, xMessage) {
     cWorkerConnectionToMaster_fHandleMessage(oThis, oError, xMessage);
   });
 };
 mUtil.inherits(cWorkerConnectionToMaster, mEvents.EventEmitter);
 
+cWorkerConnectionToMaster.prototype.toString = function cWorkerConnectionToMaster_toString() {
+  var oThis = this;
+  return "cWorkerConnectionToMaster[" + oThis._oConnection.toString() + "]";
+}
 cWorkerConnectionToMaster.prototype.fDisconnect = function cWorkerConnectionToMaster_fDisconnect() {
   var oThis = this;
-  oThis.oConnection.fDisconnect();
+  oThis._oConnection.fDisconnect();
 };
 
 function cWorkerConnectionToMaster_fHandleMessage(oThis, oError, xMessage) {
@@ -51,7 +55,12 @@ function cWorkerConnectionToMaster_fHandleMessage(oThis, oError, xMessage) {
       try {
         oResponse.xResult = fActivity(oThis, xMessage.xData);
       } catch (oError) {
-        oResponse.oError = oError;
+        // Error objects cannot be converted to a string using JSON.stringify. To get around this, a copy of the Error
+        // object is created that has the same properties, but which can be converted to a string using JSON.stringify.
+        oResponse.oError = {};
+        Object.getOwnPropertyNames(oError).forEach(function (sPropertyName) {
+          oResponse.oError[sPropertyName] = oError[sPropertyName];
+        });
       };
     } else {
       var oResponse = {
@@ -66,6 +75,6 @@ function cWorkerConnectionToMaster_fHandleMessage(oThis, oError, xMessage) {
     }; 
   };
   oThis.emit("response", oResponse);
-  oThis.oConnection.fSendMessage(oResponse);
-  bDisconnect && oThis.oConnection.fDisconnect();
+  oThis._oConnection.fSendMessage(oResponse);
+  bDisconnect && oThis._oConnection.fDisconnect();
 };
