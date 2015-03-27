@@ -1,15 +1,13 @@
 {
-  "name": "mtcpjson",
-  "description": "Module with classes to send and receive data as JSON over TCP",
+  "name": "mhive",
+  "description": "Module with classes to distribute activities on machines",
   "keywords": [
-    "TCP",
-    "JSON",
+    "Hive",
+    "Cluster",
     "remote",
     "network",
-    "data",
-    "server",
-    "client",
-    "stream"
+    "master",
+    "worker"
   ],
   "version": "0.0.0",
   "author": {
@@ -18,11 +16,11 @@
     "url": "https://github.com/SkyLined"
   },
   "bugs": {
-    "url": "https://github.com/SkyLined/mTCPJSON/issues"
+    "url": "https://github.com/SkyLined/mHive/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git://github.com/SkyLined/mTCPJSON"
+    "url": "git://github.com/SkyLined/mHive"
   },
   "main": "./index.js",
   "engines": {

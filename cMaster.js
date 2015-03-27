@@ -4,11 +4,11 @@ var mDGram = require("dgram"),
     mUtil = require("util"),
     mUDPJSON = require("../mUDPJSON"),
     mTCPJSON = require("../mTCPJSON"),
-    cHiveMasterConnectionToWorker = require("./cHiveMasterConnectionToWorker");
+    cMasterConnectionToWorker = require("./cMasterConnectionToWorker");
 
-module.exports = cHiveMaster;
+module.exports = cMaster;
 
-function cHiveMaster(dxOptions) {
+function cMaster(dxOptions) {
   if (this.constructor != arguments.callee) return new arguments.callee(dxOptions);
   // options: uIPVersion, sHostname, uPort, uBroadcastInterval (ms), uConnectionKeepAlive (ms)
   // emits: error, start, connect, disconnect, stop
@@ -31,7 +31,7 @@ function cHiveMaster(dxOptions) {
   oThis.oUDPJSONSender.on("start", function () {
     bUDPStarted = true;
     if (bTCPStarted) oThis.emit("start");
-    cHiveMaster_fBroadcastConnectionRequests(oThis);
+    cMaster_fBroadcastConnectionRequests(oThis);
   });
   oThis.oUDPJSONSender.on("error", function (oError) {
     oThis.emit("error", oError); // pass-through
@@ -58,16 +58,16 @@ function cHiveMaster(dxOptions) {
     oThis.fStop();
   });
   oThis.oTCPJSONServer.on("connect", function(oConnection) {
-    cHiveMaster_fHandleConnection(oThis, oConnection);
+    cMaster_fHandleConnection(oThis, oConnection);
   });
   oThis.oTCPJSONServer.on("stop", function() {
     oThis.bTCPStopped = false;
     if (oThis.bUDPStopped && oThis.aoConnectionsToWorkers.length == 0) oThis.emit("stop");
   });
 };
-mUtil.inherits(cHiveMaster, mEvents.EventEmitter);
+mUtil.inherits(cMaster, mEvents.EventEmitter);
 
-cHiveMaster.prototype.fStop = function cHiveMaster_fStop() {
+cMaster.prototype.fStop = function cMaster_fStop() {
   var oThis = this;
   process.nextTick(function () { // Let the caller finish what it's doing before stopping.
     oThis.oUDPJSONSender.fStop();
@@ -78,30 +78,30 @@ cHiveMaster.prototype.fStop = function cHiveMaster_fStop() {
   });
 };
 
-function cHiveMaster_fBroadcastConnectionRequests(oThis) {
+function cMaster_fBroadcastConnectionRequests(oThis) {
   // Broadcast a connection request over UDP at intervals while the UDP JSON
   // Sender is not stopped.
   if (!oThis.bUDPStopped) {
     oThis.oUDPJSONSender.fSendMessage({
-      "sType": "cHiveMaster::request connection",
+      "sType": "Hive master: request connection",
       "uPort": oThis.uPort,
       "uIPVersion": oThis.uIPVersion,
     });
     setTimeout(function () {
-      cHiveMaster_fBroadcastConnectionRequests(oThis);
+      cMaster_fBroadcastConnectionRequests(oThis);
     }, oThis.uBroadcastInterval);
-  }
-}
+  };
+};
 
-function cHiveMaster_fHandleConnection(oThis, oConnection) {
-  var oConnectionToWorker = new cHiveMasterConnectionToWorker(oConnection);
+function cMaster_fHandleConnection(oThis, oConnection) {
+  var oConnectionToWorker = new cMasterConnectionToWorker(oThis, oConnection);
   oThis.aoConnectionsToWorkers.push(oConnectionToWorker);
   oConnectionToWorker.on("disconnect", function () {
     oThis.aoConnectionsToWorkers.splice(oThis.aoConnectionsToWorkers.indexOf(oConnectionToWorker), 1);
     oThis.emit("disconnect", oConnectionToWorker);
     if (!oThis.oReceiver && oThis.aoConnectionsToWorkers.length == 0) {
       oThis.emit("stop");
-    }
+    };
   });
   oThis.emit("connect", oConnectionToWorker);
-}
+};

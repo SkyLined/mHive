@@ -1,159 +1,184 @@
-mTCPJSON
+mHive
 ===============
 
-Module with classes to send and receive data as JSON over TCP.
+Module with classes to distribute activities on machines.
 
 Getting Started
 ---------------
-1. Install mTCPJSON via NPM.
+1. Install mHive via NPM.
   
-  `npm install mtcpjson`
+  `npm install mhive`
   
-  Optionally: rename `mtcpjson` to `mTCPJSON`: npm is unable to handle the
+  Optionally: rename `mhive` to `mHive`: npm is unable to handle the
   complexity of uppercase characters in a module name. Node.js on Windows does
   not have this problem, so renaming the folder is not required for you to use
   the module.
   
-2. Require mTCPJSON in your project.
+2. Require mHive in your project.
   
-  `var mTCPJSON = require("mTCPJSON");`
+  `var mHive = require("mHive");`
 
-3. Instantiate a cServer to accept connections and send/receive data.
+3. Instantiate a `cWorker` on one machine to be able to run activities on it.
   ```
-  var oTCPJSONServer = new mTCPJSON.cServer();
-  oTCPJSONServer.on("connect", function (oTCPJSONConnection) {
-    oTCPJSONConnection.on("message", function (oError, xData) {
+  var dfActivities = {
+    "Send greetings": function (oHiveWorkerConnectionToMaster, xData) {
+      return "Hello, world!";
+    },
+  };
+  var oHiveWorker = new mHive.cWorker({}, dfActivities);
+  ```
+
+4. Instantiate a `cMaster` to be able to enumerate active `cWorker` instances
+   and run activities on them.
+  ```
+  var oHiveMaster = new mHive.cMaster();
+  oHiveMaster.on("connect", function (oConnectionToWorker) {
+    oConnectionToWorker.fRequestActivity("Send greetings", function (oError, xResult) {
       if (oError) {
         // Handle oError
       } else {
-        // Process xData
-      }
+        console.log(xResult); // Output "Hello, world!" result of activity.
+      };
     });
-    oTCPJSONConnection.fSendMessage("Anything that can be stringified", function (bSuccess) {
-      if (!bSuccess) {
-        // Failed to send (connection probably closed).
-      }
-    });
-  });
-  ```
-
-4. Create a cConnection to a server and send/receive data.
-  ```
-  var oTCPJSONConnection = new mTCPJSON.fConnect();
-  oTCPJSONConnection.on("message", function (oError, xData) {
-    if (oError) {
-      // Handle oError
-    } else {
-      // Process xData
-    }
-  });
-  oTCPJSONConnection.fSendMessage("Anything that can be stringified", function (bSuccess) {
-    if (!bSuccess) {
-      // Failed to send (connection probably closed).
-    }
   });
   ```
 
 Notes
 -----
-The `cServer` and `cConnection` instances created using `fConnect` can be on
-the same machine or on two different machines. By default `fConnect` connects
-to the local machine.
+The `cWorker` and `cMaster` instances can be on the same machine or on two
+different machines. By default `cWorker` listens for `cMaster` connects to the local machine.
 
-`cConnection.fSendMessage` is used to send a message that consist of one value
-converted to a string using `JSON.stringify`. `cConnection` emits one `message`
-event for each such message received, with two parameters. The first parameter
-is an `Error` object if an invalid message was received or undefined if the
-message was valid. The second parameter is the value that was sent,
-reconstructed from the data in the message using `JSON.parse`.
-
-Protocol
---------
-The protocol used to transmit data is simple and robust. Each message sent
-starts with a string that represents the length of the JSON data in the message,
-followed by a semi colon. This is followed by the actual JSON data and another
-semicolon. Messages that are larger than the maximum transfer unit (MTU) of the
-network are broken into smaller chunks. However, to reduce the risk of a sender
-swamping a receiver with data, there is a limit of 1Mb on the size of the JSON
-data that can be transmitted in one message.
-
-Example:
-  ```
-  14;"Hello, World";
-  ```
-Where `"Hello, World"` is of course 14 characters long. If a message is received
-that is not in accordance with the protocol, the receiver emits an "error"
-event.
+`cMaster` instances periodically broadcast a message over UDP that request any
+`cWorker` instances to connect to it. `cWorker` instances listen for such UDP
+messages and connect to the `cMaster` instance when one is received, unless a
+connection to that `cMaster` instance has already been established.
 
 API
 -----
-### `class cServer`
-Can be used to accept connections, through which you can send values as JSON.
+### `class cWorker`
+Can be used to perform activities at the request of a (remote) `cWorker`.
 
 #### Constructors:
-##### `[new] mTCPJSON.cServer(Object dxOptions);`
+##### `[new] mHive.cWorker(Object dxOptions, Object dfActivities);`
 Where `dxOptions` is an object that can have the following properties:
 - `Number uIPVersion`: IP version to use (valid values: 4 (default), 6).
-- `String sHostname`: Target computer (default: broadcast to local subnet).
 - `Number uPort`: port number to send to (default: 28876).
-- `Number uConnectionKeepAlive`: Enable sending [TCP keep-alive](http://en.wikipedia.org/wiki/Keepalive#TCP_keepalive)
-          packets every `uConnectionKeepAlive` milliseconds.
+And `dfActivities` is an associative array of activities. Each activity is
+identified by  a (string) name, which is associateed with a function that
+performs the activity and returns a result. The result must be a value that
+can be converted to a string using `JSON.stringify`
 
 #### Events:
 ##### `error`, parameter: `Error oError`
 Emitted when there is a network error.
 ##### `start`
-Emitted when the `cServer` instance is ready to receive connections.
-##### `connect`, parameter: `cConnection oConnection`
-Emitted when a connection to the server is established.
-##### `disconnect`, parameter: `cConnection oConnection`
-Emitted when a connection to the server is disconnected.
+Emitted when the worker is waiting for connect requests from a master.
+##### `message`, parameter: `Object oSender`, `Error oError`, `Any xMessage`
+Emitted when a message is received over UDP. Requests to connect to a master are
+sent this way, but other messages may also trigger this event.
+##### `connect`, parameter: `cWorkerConnectionToMaster oConnection`
+Emitted when a connection to a master is established at the request of that
+master. 
+##### `disconnect`, parameter: `cWorkerConnectionToMaster oConnection`
+Emitted when a connection to a master is disconnected.
 ##### `stop`
-Emitted when the `cServer` instance has stopped receiving connections. This
-can happen when there is a network error or after you tell the sender to stop.
+Emitted when the worker no more connections to masters and stopped listening
+for new connection requests. This can happen when there is a network error or
+after you tell the worker to stop.
 
 #### Methods:
 ##### `undefined fStop()`
-Stop the `cServer` instance.
+Close all connections to masters and stop listening for new connection requests.
 
-### `undefined fConnect(Object dxOptions, Function fCallback)
+### `class cWorkerConnectionToMaster`
+Emitted by the `connect` event of `cWorker` instances. Used to read requests to
+perform activities send by the master and perform them. When a request to
+perform an activity is received, and the activity is listed in the
+`dfActivities` argument past to the `cWorker` constructor, the associated
+function is called with the connection as the first argument, as in:
+`fActivity(cWorkerConnectionToMaster oConnection, Any xData)`. The second
+argument is whatever data the master sent with the request, which is usually
+some form of parameter needed to perform the requested activity. The return
+value of the `fActivity` function is send back to the master as the result of
+the activity.
+
+#### Properties:
+##### `cWorker oWorker`
+A reference to the worker that emitted this cWorkerConnectionToMaster instance. 
+
+#### Methods:
+##### `undefined fDisconnect()`
+Close this connection to the master.
+
+### `class cMaster`
+Can be used to enumerate workers and the activities they can perform as well as
+request them to perform these activities.
+
+#### Constructors:
+##### `[new] mHive.cMaster(Object dxOptions);`
 Where `dxOptions` is an object that can have the following properties:
 - `Number uIPVersion`: IP version to use (valid values: 4 (default), 6).
-- `String sHostname`: Target computer (default: connect to local computer).
-- `Number uPort`: port number to connect to (default: 28876).
+- `String sHostname`: Network device to bind to (default: computer name, use
+             `localhost` if you want to accept connections only from scripts
+             running on the same machine).
+- `Number uPort`: port number to use (default: 28876).
+- `Number uBroadcastInterval`: interval in millseconds between broadcasting
+             connection requests to the local subnet (default: 10,000).
 - `Number uConnectionKeepAlive`: Enable sending [TCP keep-alive](http://en.wikipedia.org/wiki/Keepalive#TCP_keepalive)
           packets every `uConnectionKeepAlive` milliseconds.
-`fConnect` attempts to establish a connection of a `cServer` instance using the
-provided `dxOptions`. `fCallback(Error oError, cConnection oConnection)` is
-called when a connection cannot be established (`oError` will contain details)
-or when a connection has been established (`oError` is `undefined`).
-
-### `class cConnection`
-Represent connections through which data can be transmitted as JSON messages.
-Instances of `cConnection` are emitted through the `connect` event of `cServer`
-instances, and passed to the callback of the `fConnect` function.
+At regular intervals, a `cMaster` instance will broadcast over UDP to the local
+subnet. This broadcast contains a request for `cWorkers` to connect to it. Once
+a worker is connected, request can be made for it to perform activities and
+return the results.
 
 #### Events:
 ##### `error`, parameter: `Error oError`
 Emitted when there is a network error.
-##### `message`, parameters: `Error oError`, `Any xData`
-Emitted when the `cConnection` instance has received a message. If the message
-was invalid, `oError` will contain a description of the problem. Otherwise,
-`oError` will be undefined and xData will contain the data sent by the
-`cConnection` instance on the other end of the connection.
-##### `disconnect`
-Emitted when the `cConnection` instance has stopped receiving messages. This
-happens when there is a network error or after you tell the connection to
-disconnect.
+##### `start`
+Emitted when the master is sending connection requests to workers and waiting
+for them to connect.
+##### `connect`, parameter: `cMasterConnectionToWorker oConnection`
+Emitted when a worker connects to the master. 
+##### `disconnect`, parameter: `cMasterConnectionToWorker oConnection`
+Emitted when a worker is disconnected from the master.
+##### `stop`
+Emitted when the master is not connected to any workers, no longer sending
+connection requests to workers and not accepting new connections from workers.
+This can happen when there is a network error or after you tell the master to
+stop.
 
 #### Methods:
-##### `undefined fSendMessage(Any xMessage, Function fCallback)`
-Convert the data in `xMessage` to string using `JSON.stringify` and send it to
-through the connection. `fCallback(Boolean bSuccess)` is called when the message
-has been sent (`bSuccess == true`) or when there was an error (`bSuccess ==
-false`). 
+##### `undefined fStop()`
+Stop sending connection requests, close all existing connections to workers and
+do not accept any new connections from workers.
+
+### `class cMasterConnectionToWorker`
+Emitted by the `connect` event of `cMaster` instances. Used to send requests to
+perform activities to the workers and read the results.
+
+#### Properties:
+##### `cMaster oMaster`
+A reference to the master that emitted this cMasterConnectionToWorker instance. 
+
+#### Methods:
+##### `undefined fGetListOfActivities(Function fCallback)`
+Request a list of activities that the worker is able to perform. 
+`fCallback(Error oError, String[] asActivityNames)` is called when the list
+cannot be requested (`oError` will contain details) or when the list was
+successfully received (`oError will be `undefined`, `asActivityNames` is an
+array containing strings that represent the names of the activities the worker
+can perform.
+
+##### `undefined fRequestActivity(String sActivity, Any xData, Function fCallback)`
+Request the worker to perform the activity identified by the name in `sActivity`
+and send whatever value is in `xData` to the worker to be passed to the activity
+as a parameter (See `class cWorkerConnectionToMaster` for details).
+`fCallback(Error oError, Any xResult)` is called if there was an error (`oError`
+will contain details) or if the activity was successfully perform (`oError` will
+be undefined, `xResult` contains data returned by the activity).
+
 ##### `undefined fDisconnect()`
-Disconnect the `cConnection` instance.
+Close this connection to the worker.
 
 --------------------------------------------------------------------------------
 

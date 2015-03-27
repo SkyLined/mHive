@@ -1,5 +1,5 @@
-var cHiveMaster = require("./cHiveMaster.js"),
-    cHiveWorker = require("./cHiveWorker.js");
+var cHiveMaster = require("./cMaster.js"),
+    cHiveWorker = require("./cWorker.js");
 
 function startMaster(fCallback) {
   var oHiveMaster = new cHiveMaster();
