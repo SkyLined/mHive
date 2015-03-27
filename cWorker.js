@@ -4,8 +4,8 @@ var mDGram = require("dgram"),
     mEvents = require("events"),
     mNet = require("net"),
     mUtil = require("util"),
-    mUDPJSON = require("../mUDPJSON"),
-    mTCPJSON = require("../mTCPJSON"),
+    mUDPJSON = require("mUDPJSON"),
+    mTCPJSON = require("mTCPJSON"),
     cWorkerConnectionToMaster = require("./cWorkerConnectionToMaster");
 
 function cWorker(dxOptions, dfActivities) {

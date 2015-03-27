@@ -2,8 +2,8 @@ var mDGram = require("dgram"),
     mEvents = require("events"),
     mOS = require("os"),
     mUtil = require("util"),
-    mUDPJSON = require("../mUDPJSON"),
-    mTCPJSON = require("../mTCPJSON"),
+    mUDPJSON = require("mUDPJSON"),
+    mTCPJSON = require("mTCPJSON"),
     cMasterConnectionToWorker = require("./cMasterConnectionToWorker");
 
 module.exports = cMaster;
