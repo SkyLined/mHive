@@ -6,18 +6,18 @@ var mDGram = require("dgram"),
     mUtil = require("util"),
     mUDPJSON = require("mUDPJSON"),
     mTCPJSON = require("mTCPJSON"),
-    cWorkerConnectionToMaster = require("./cWorkerConnectionToMaster");
+    cEventPipe = require("./cEventPipe");
 
-function cWorker(dxOptions, dfActivities) {
-  if (this.constructor != arguments.callee) return new arguments.callee(dxOptions, dfActivities);
+function cWorker(dfEventHandlers, dxOptions) {
+  if (this.constructor != arguments.callee) return new arguments.callee(dfEventHandlers, dxOptions);
   // options: uIPVersion, uPort
   // emits: error, start, message, connect, disconnect, stop
   var oThis = this;
+  oThis.dfEventHandlers = dfEventHandlers || {};
   dxOptions = dxOptions || {};
   oThis._uIPVersion = dxOptions.uIPVersion || 4;
   oThis._uPort = dxOptions.uPort || 28876;
-  oThis.dfActivities = dfActivities || {};
-  oThis._aoConnectionsToMasters = [];
+  oThis._aoEventPipes = [];
   oThis._oUDPJSONReceiver = mUDPJSON.cReceiver({
     "uIPVersion": oThis._uIPVersion || 4,
     "uPort": oThis._uPort || 28876,
@@ -32,11 +32,11 @@ function cWorker(dxOptions, dfActivities) {
   oThis._oUDPJSONReceiver.on("message", function (oSender, oError, xMessage) {
     oThis.emit("message", oSender, oError, xMessage);
     if (!oError && xMessage.sType == "Hive master: request connection") {
-      if (oThis._aoConnectionsToMasters.every(function (oConnectionToMaster) {
+      if (oThis._aoEventPipes.every(function (oEventPipe) {
         return (
-          oConnectionToMaster.oConnection.uIPVersion != xMessage.uIPVersion ||
-          oConnectionToMaster.oConnection.sHostname != oSender.sHostname ||
-          oConnectionToMaster.oConnection.uPort != xMessage.uPort
+          oEventPipe.oConnection.uIPVersion != xMessage.uIPVersion ||
+          oEventPipe.oConnection.sHostname != oSender.sHostname ||
+          oEventPipe.oConnection.uPort != xMessage.uPort
         );
       })) {
         cWorker_fConnectToMaster(oThis, xMessage.uIPVersion, oSender.sHostname, xMessage.uPort);
@@ -45,7 +45,7 @@ function cWorker(dxOptions, dfActivities) {
   });
   oThis._oUDPJSONReceiver.on("stop", function (oError) {
     oThis._oUDPJSONReceiver = null; // pass-through
-    if (oThis._aoConnectionsToMasters.length == 0) {
+    if (oThis._aoEventPipes.length == 0) {
       oThis.emit("stop");
     };
   });
@@ -56,7 +56,7 @@ cWorker.prototype.fStop = function cWorker_fStop() {
   var oThis = this;
   process.nextTick(function () { // Let the caller finish what it's doing before stopping.
     oThis._oUDPJSONReceiver && oThis._oUDPJSONReceiver.fStop();
-    oThis._aoConnectionsToMasters.forEach(function (oConnection) {
+    oThis._aoEventPipes.forEach(function (oConnection) {
       oConnection.fDisconnect();
     });
   });
@@ -72,20 +72,20 @@ function cWorker_fConnectToMaster(oThis, uIPVersion, sHostname, uPort) {
     if (oError) {
       oThis.emit("error", oError);
     } else {
-      var oConnectionToMaster = new cWorkerConnectionToMaster(oThis, oConnection);
-      oThis._aoConnectionsToMasters.push(oConnectionToMaster);
-      oConnectionToMaster.on("disconnect", function () {
-        oThis._aoConnectionsToMasters.splice(oThis._aoConnectionsToMasters.indexOf(oConnectionToMaster), 1);
+      var oEventPipe = new cEventPipe(oThis, oConnection);
+      oThis._aoEventPipes.push(oEventPipe);
+      oEventPipe.on("disconnect", function () {
+        oThis._aoEventPipes.splice(oThis._aoEventPipes.indexOf(oEventPipe), 1);
         process.nextTick(function() {
           // we don't want to emit "disconnect" and "stop" before everyone has handled the "disconnect" emitted by the
-          // cWorkerConnectionToMaster instance.
-          oThis.emit("disconnect", oConnectionToMaster);
-          if (!oThis._oUDPJSONReceiver && oThis._aoConnectionsToMasters.length == 0) {
+          // oEventPipe instance.
+          oThis.emit("disconnect", oEventPipe);
+          if (!oThis._oUDPJSONReceiver && oThis._aoEventPipes.length == 0) {
             oThis.emit("stop");
           };
         });
       });
-      oThis.emit("connect", oConnectionToMaster);
+      oThis.emit("connect", oEventPipe);
     };
   });
 };

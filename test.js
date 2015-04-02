@@ -14,57 +14,44 @@ function startMaster(fCallback) {
   oHiveMaster.on("request connection", function () {
     console.log("HiveMaster:request connection");
   });
-  oHiveMaster.on("connect", function (oHiveMasterConnectionToWorker) {
+  oHiveMaster.on("connect", function (oEventPipe) {
     // hook all events and output them
-    console.log("HiveMaster:connect (oHiveMasterConnectionToWorker = " + oHiveMasterConnectionToWorker.toString() + ")");
-    oHiveMasterConnectionToWorker.on("error", function (oError) {
-      console.log("oHiveMasterConnectionToWorker:error (oError =", oError, ")");
+    console.log("HiveMaster:connect (oEventPipe = " + oEventPipe.toString() + ")");
+    oEventPipe.on("error", function (oError) {
+      console.log("oEventPipe:error (oError = " + JSON.stringify(oError) + ")");
     });
-    oHiveMasterConnectionToWorker.on("request", function (oMessage) {
-      console.log("oHiveMasterConnectionToWorker:request (oMessage =", JSON.stringify(oMessage) + ")");
+    oEventPipe.on("event", function (dxEventMessage) {
+      console.log("oEventPipe:event (oMessage = " + JSON.stringify(dxEventMessage) + ")");
     });
-    oHiveMasterConnectionToWorker.on("response", function (oError, oMessage) {
-      console.log("oHiveMasterConnectionToWorker:response (oError =", oError, ", oMessage =", JSON.stringify(oMessage) + ")");
+    oEventPipe.on("message", function (oError, oMessage) {
+      console.log("oEventPipe:message (oError = " + JSON.stringify(oError) + ", oMessage =", JSON.stringify(oMessage) + ")");
     });
-    oHiveMasterConnectionToWorker.on("disconnect", function () {
-      console.log("oHiveMasterConnectionToWorker:disconnect");
+    oEventPipe.on("response", function (dxResponseMessage) {
+      console.log("oEventPipe:response (oMessage =", JSON.stringify(dxResponseMessage) + ")");
     });
-    // request list of activities for worker
-    oHiveMasterConnectionToWorker.fGetListOfActivities(function (oError, asActivities) {
-      if (oError) {
-        console.log("oHiveMasterConnectionToWorker:cannot get list of activities:", oError);
-      } else {
-        console.log("oHiveMasterConnectionToWorker:list of activities:", JSON.stringify(asActivities));
-        asActivities.sort();
-        (function fRequestActivities_Helper() {
-          var sActivity = asActivities.shift();
-          var oData = {"sActivity": sActivity};
-          oHiveMasterConnectionToWorker.fRequestActivity(sActivity, oData, function (oError, xResult) {
-            if (oError) {
-              console.log("oHiveMasterConnectionToWorker:activity", JSON.stringify(sActivity), "failed:", oError);
-            } else {
-              console.log("oHiveMasterConnectionToWorker:activity", JSON.stringify(sActivity), "returned", JSON.stringify(xResult));
-            }
-            if (asActivities.length) {
-              fRequestActivities_Helper();
-            } else {
-              oHiveMaster.fStop();
-            }
-          })
-        })();
-      }
+    oEventPipe.on("disconnect", function () {
+      console.log("oEventPipe:disconnect");
+      oHiveMaster.fStop();
+    });
+    oEventPipe.fReportEvent("request greeting", null, function(oEventPipe, oError, xResultData) {
+      if (oError) throw oError;
+      console.log("request greeting result:", JSON.stringify(xResultData));
+      oEventPipe.fReportEvent("request stop", null, function(oEventPipe, oError, xResultData) {
+        if (oError) throw oError;
+        console.log("request stop result:", JSON.stringify(xResultData));
+      });
     });
   });
-  oHiveMaster.on("disconnect", function (oHiveMasterConnectionToWorker) {
-    console.log("HiveMaster:disconnect (oHiveMasterConnectionToWorker = " + oHiveMasterConnectionToWorker.toString() + ")");
+  oHiveMaster.on("disconnect", function (oEventPipe) {
+    console.log("HiveMaster:disconnect (oEventPipe = " + oEventPipe.toString() + ")");
   });
   oHiveMaster.on("stop", function () {
     console.log("HiveMaster:stop");
   });
 };
 
-function startWorker(dfActivities, fCallback) {
-  var oHiveWorker = new cHiveWorker({}, dfActivities);
+function startWorker(dfEventHandlers, fCallback) {
+  var oHiveWorker = new cHiveWorker(dfEventHandlers);
   oHiveWorker.on("error", function (oError) {
     console.log("HiveWorker:error (oError =", oError, ")");
   });
@@ -75,49 +62,53 @@ function startWorker(dfActivities, fCallback) {
   oHiveWorker.on("message", function (oSender, oError, xMessage) {
     console.log("HiveWorker:message (oSender = ", oSender, ", oError =", oError, ", xMessage =", JSON.stringify(xMessage) + ")");
   });
-  oHiveWorker.on("connect", function (oHiveWorkerConnectionToMaster) {
-    console.log("HiveWorker:connect (oHiveWorkerConnectionToMaster = " + oHiveWorkerConnectionToMaster.toString() + ")");
-    oHiveWorkerConnectionToMaster.on("error", function (oError) {
-      console.log("oHiveWorkerConnectionToMaster:error (oError =", oError, ")");
+  oHiveWorker.on("connect", function (oEventPipe) {
+    console.log("HiveWorker:connect (oEventPipe = " + oEventPipe.toString() + ")");
+    oEventPipe.on("error", function (oError) {
+      console.log("oEventPipe:error (oError =", oError, ")");
     });
-    oHiveWorkerConnectionToMaster.on("request", function (oError, oMessage) {
-      console.log("oHiveWorkerConnectionToMaster:request (oError =", oError, ", oMessage =", JSON.stringify(oMessage) + ")");
+    oEventPipe.on("event", function (dxEventMessage) {
+      console.log("oEventPipe:event (oMessage = " + JSON.stringify(dxEventMessage) + ")");
     });
-    oHiveWorkerConnectionToMaster.on("response", function (oMessage) {
-      console.log("oHiveWorkerConnectionToMaster:response (oMessage =", JSON.stringify(oMessage) + ")");
+    oEventPipe.on("message", function (oError, oMessage) {
+      console.log("oEventPipe:message (oError = " + JSON.stringify(oError) + ", oMessage =", JSON.stringify(oMessage) + ")");
     });
-    oHiveWorkerConnectionToMaster.on("disconnect", function () {
-      console.log("oHiveWorkerConnectionToMaster:disconnect");
+    oEventPipe.on("response", function (dxResponseMessage) {
+      console.log("oEventPipe:response (oMessage =", JSON.stringify(dxResponseMessage) + ")");
+    });
+    oEventPipe.on("disconnect", function () {
+      console.log("oEventPipe:disconnect");
     });
   });
-  oHiveWorker.on("disconnect", function (oHiveWorkerConnectionToMaster) {
-    console.log("HiveWorker:disconnect (oHiveWorkerConnectionToMaster = " + oHiveWorkerConnectionToMaster.toString() + ")");
+  oHiveWorker.on("disconnect", function (oEventPipe) {
+    console.log("HiveWorker:disconnect (oEventPipe = " + oEventPipe.toString() + ")");
   });
   oHiveWorker.on("stop", function () {
     console.log("HiveWorker:stop");
   });
 };
 
-var dfActivities = {
-  "1 send greeting": function (oHiveWorkerConnectionToMaster, xData) {
+var dfEventHandlers = {
+  "request greeting": function (oEventPipe, xEventData, fCallback) {
     console.log("Executing activity \"send greeting\"");
-    return {
+    fCallback(undefined, {
       "sGreeting": "Hello, world!",
-      "xData": xData,
-    };
+      "xData": xEventData,
+    });
   },
-  "2 stop": function (oHiveWorkerConnectionToMaster, xData) {
+  "request stop": function (oEventPipe, xEventData, fCallback) {
     console.log("Executing activity \"stop\"");
-    oHiveWorkerConnectionToMaster.oWorker.fStop();
+    oEventPipe.oOwner.fStop();
+    fCallback();
   }
 };
 
 if (process.argv[2] == "worker") {
-  startWorker(dfActivities);
+  oWorker = startWorker(dfEventHandlers);
 } else if (process.argv[2] == "master") {
   startMaster();
 } else {
-  startWorker(dfActivities, function(oHiveWorker) {
+  startWorker(dfEventHandlers, function(oHiveWorker) {
     startMaster(function(oHiveMaster) {
     });
   });

@@ -4,15 +4,16 @@ var mDGram = require("dgram"),
     mUtil = require("util"),
     mUDPJSON = require("mUDPJSON"),
     mTCPJSON = require("mTCPJSON"),
-    cMasterConnectionToWorker = require("./cMasterConnectionToWorker");
+    cEventPipe = require("./cEventPipe");
 
 module.exports = cMaster;
 
-function cMaster(dxOptions) {
-  if (this.constructor != arguments.callee) return new arguments.callee(dxOptions);
+function cMaster(dfEventHandlers, dxOptions) {
+  if (this.constructor != arguments.callee) return new arguments.callee(dfEventHandlers, dxOptions);
   // options: uIPVersion, sHostname, uPort, uBroadcastInterval (ms), uConnectionKeepAlive (ms)
   // emits: error, start, request connection, connect, disconnect, stop
   var oThis = this;
+  oThis.dfEventHandlers = dfEventHandlers || {};
   dxOptions = dxOptions || {};
   oThis._uIPVersion = dxOptions.uIPVersion || 4;
   var sHostname = dxOptions.sHostname || mOS.hostname();
@@ -23,7 +24,7 @@ function cMaster(dxOptions) {
   var bUDPStarted = false, bTCPStarted = false;
   oThis._bUDPStopped = false;
   oThis._bTCPStopped = false;
-  oThis._aoConnectionsToWorkers = [];
+  oThis._aoEventPipes = [];
   oThis._oBroadcastInterval = undefined;
   oThis._oUDPJSONSender = mUDPJSON.cSender({
     "uIPVersion": oThis._uIPVersion || 4,
@@ -47,7 +48,7 @@ function cMaster(dxOptions) {
     }
     oThis.oUDPJSONReceiver = null;
     oThis._bUDPStopped = true;
-    if (oThis._bTCPStopped && oThis._aoConnectionsToWorkers.length == 0) {
+    if (oThis._bTCPStopped && oThis._aoEventPipes.length == 0) {
       oThis.emit("stop");
     }
   });
@@ -73,7 +74,7 @@ function cMaster(dxOptions) {
   });
   oThis._oTCPJSONServer.on("stop", function() {
     oThis._bTCPStopped = false;
-    if (oThis._bUDPStopped && oThis._aoConnectionsToWorkers.length == 0) {
+    if (oThis._bUDPStopped && oThis._aoEventPipes.length == 0) {
       oThis.emit("stop");
     }
   });
@@ -82,7 +83,7 @@ mUtil.inherits(cMaster, mEvents.EventEmitter);
 
 cMaster.prototype.faoGetConnections = function cMaster_foGetConnections() {
   var oThis = this;
-  return oThis._aoConnectionsToWorkers.slice();
+  return oThis._aoEventPipes.slice();
 }
 
 cMaster.prototype.fStop = function cMaster_fStop() {
@@ -90,7 +91,7 @@ cMaster.prototype.fStop = function cMaster_fStop() {
   process.nextTick(function () { // Let the caller finish what it's doing before stopping.
     oThis._oUDPJSONSender.fStop();
     oThis._oTCPJSONServer.fStop();
-    oThis._aoConnectionsToWorkers.forEach(function (oConnection) {
+    oThis._aoEventPipes.forEach(function (oConnection) {
       oConnection.fDisconnect();
     });
   });
@@ -113,18 +114,18 @@ function cMaster_fSendConnectionRequests(oThis) {
 };
 
 function cMaster_fHandleConnection(oThis, oConnection) {
-  var oConnectionToWorker = new cMasterConnectionToWorker(oThis, oConnection);
-  oThis._aoConnectionsToWorkers.push(oConnectionToWorker);
-  oConnectionToWorker.on("disconnect", function () {
-    oThis._aoConnectionsToWorkers.splice(oThis._aoConnectionsToWorkers.indexOf(oConnectionToWorker), 1);
+  var oEventPipe = new cEventPipe(oThis, oConnection);
+  oThis._aoEventPipes.push(oEventPipe);
+  oEventPipe.on("disconnect", function () {
+    oThis._aoEventPipes.splice(oThis._aoEventPipes.indexOf(oEventPipe), 1);
     process.nextTick(function() {
       // we don't want to emit "disconnect" and "stop" before everyone has handled the "disconnect" emitted by the
-      // cMasterConnectionToWorker instance.
-      oThis.emit("disconnect", oConnectionToWorker);
-      if (!oThis.oReceiver && oThis._aoConnectionsToWorkers.length == 0) {
+      // cEventPipe instance.
+      oThis.emit("disconnect", oEventPipe);
+      if (oThis._bTCPStopped && oThis._bUDPStopped && oThis._aoEventPipes.length == 0) {
         oThis.emit("stop");
       };
     });
   });
-  oThis.emit("connect", oConnectionToWorker);
+  oThis.emit("connect", oEventPipe);
 };
