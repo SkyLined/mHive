@@ -23,13 +23,8 @@
     "url": "git://github.com/SkyLined/mHive"
   },
   "dependencies": {
-<<<<<<< HEAD
     "mtcpjsonrpc": "~0.0.4",
     "mudpjson": "~0.0.5"
-=======
-    "mtcpjson": "~0.0.3",
-    "mudpjson": "~0.0.3"
->>>>>>> origin/master
   },
   "main": "./index.js",
   "engines": {
